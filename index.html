@@ -8,9 +8,36 @@
 </head>
 <body>
     <h2>Water Quality Prediction</h2>
-    <button onclick="predict()">Predict</button>
-    <p id="result">Prediction: </p>
+    <p id="prediction">Waiting for data...</p>
 
-    <script src="script.js"></script>
+    <script>
+        async function loadModel() {
+            console.log("Loading model...");
+            const model = await tf.loadLayersModel("https://adithya262.github.io/Water_quality/tfjs_model/model.json");
+            console.log("Model loaded!");
+
+            // Start listening for sensor data from ESP8266
+            startServer(model);
+        }
+
+        function startServer(model) {
+            const server = new EventSource("/sensor-data"); // Replace with ESP8266 IP
+            server.onmessage = async function (event) {
+                const sensorData = JSON.parse(event.data);
+                console.log("Received data:", sensorData);
+
+                const input = tf.tensor2d([[sensorData.tds, sensorData.turbidity, sensorData.ph, sensorData.temperature]]);
+                const prediction = model.predict(input);
+                const qualityScore = prediction.dataSync()[0];
+
+                document.getElementById("prediction").innerText = `Predicted Quality Score: ${qualityScore.toFixed(2)}`;
+
+                // Send prediction back to ESP8266
+                fetch(`/send-prediction?score=${qualityScore.toFixed(2)}`);
+            };
+        }
+
+        loadModel();
+    </script>
 </body>
 </html>
